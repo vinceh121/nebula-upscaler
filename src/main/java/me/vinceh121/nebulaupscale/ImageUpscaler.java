@@ -3,17 +3,17 @@ package me.vinceh121.nebulaupscale;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ImageUpscaler {
 	private final ExecutorService exec;
-	private String esrganPath;
-	private Path input, output;
+	private Path input, output, esrganPath;
+	private int scale = 4;
 
 	public ImageUpscaler() {
-		this(Executors.newFixedThreadPool(4));
+		this(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() / 5)); // a single realgan instance
+																							// uses 5 threads by default
 	}
 
 	public ImageUpscaler(ExecutorService exec) {
@@ -36,8 +36,10 @@ public class ImageUpscaler {
 					Files.createDirectories(out.getParent());
 					long start = System.currentTimeMillis();
 					Process p = Runtime.getRuntime()
-						.exec(new String[] { this.esrganPath, "-i", c.toAbsolutePath().toString(), "-o",
-								out.toString() }, null, Paths.get(esrganPath).getParent().toAbsolutePath().toFile());
+						.exec(new String[] { this.esrganPath.toAbsolutePath().toString(), "-i",
+								c.toAbsolutePath().toString(), "-o", out.toString(), "-s", String.valueOf(this.scale) },
+								null,
+								esrganPath.getParent().toAbsolutePath().toFile());
 					p.waitFor();
 					System.out.println(out.getFileName() + ": " + (System.currentTimeMillis() - start) + "ms");
 				} catch (IOException | InterruptedException e) {
@@ -47,11 +49,11 @@ public class ImageUpscaler {
 		});
 	}
 
-	public String getEsrganPath() {
+	public Path getEsrganPath() {
 		return esrganPath;
 	}
 
-	public void setEsrganPath(String esrganPath) {
+	public void setEsrganPath(Path esrganPath) {
 		this.esrganPath = esrganPath;
 	}
 
@@ -69,5 +71,17 @@ public class ImageUpscaler {
 
 	public void setOutput(Path output) {
 		this.output = output;
+	}
+
+	public int getScale() {
+		return scale;
+	}
+
+	public void setScale(int scale) {
+		this.scale = scale;
+	}
+
+	public ExecutorService getExecutorService() {
+		return this.exec;
 	}
 }
