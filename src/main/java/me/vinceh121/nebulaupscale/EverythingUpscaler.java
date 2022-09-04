@@ -1,6 +1,9 @@
 package me.vinceh121.nebulaupscale;
 
+import java.awt.geom.AffineTransform;
+import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -18,7 +21,11 @@ import javax.imageio.ImageIO;
 import me.vinceh121.n2ae.pkg.NnpkFileExtractor;
 import me.vinceh121.n2ae.pkg.NnpkFileReader;
 import me.vinceh121.n2ae.pkg.NnpkFileWriter;
+import me.vinceh121.n2ae.texture.Block;
+import me.vinceh121.n2ae.texture.BlockFormat;
+import me.vinceh121.n2ae.texture.BlockType;
 import me.vinceh121.n2ae.texture.NtxFileReader;
+import me.vinceh121.n2ae.texture.NtxFileWriter;
 
 public class EverythingUpscaler {
 	private final ExecutorService exec;
@@ -35,6 +42,7 @@ public class EverythingUpscaler {
 		Files.createDirectories(e.getExtractionFolder());
 		Files.createDirectories(e.getWorkingFolder());
 		e.run();
+		System.exit(0);
 	}
 
 	public EverythingUpscaler() {
@@ -50,13 +58,18 @@ public class EverythingUpscaler {
 		this.extractArchive();
 		System.out.println("Converting textures to PNG");
 		this.convertAllTextures();
+		this.waitForTasks();
 		System.out.println("Upscaling Textures");
-//		this.upscaleTextures();
-		System.out.println("Upscaling UVs");
-		this.upscaleUVs();
+		this.upscaleTextures();
+		this.convertTexturesBack();
+		this.waitForTasks();
+//		System.out.println("Upscaling UVs");
+//		this.upscaleUVs();
+//		this.waitForTasks();
 		System.out.println("Repacking");
 		this.moveWorking();
 		this.repack();
+		this.waitForTasks();
 
 		System.out.println("Done!");
 	}
@@ -90,11 +103,11 @@ public class EverythingUpscaler {
 						ImageIO.write(img, "png", out);
 					}
 				} catch (IOException e) {
+					System.err.println(c);
 					e.printStackTrace();
 				}
 			});
 		});
-		this.waitForTasks();
 	}
 
 	private void upscaleTextures() throws IOException, InterruptedException {
@@ -106,6 +119,75 @@ public class EverythingUpscaler {
 		up.run();
 		up.getExecutorService().shutdown();
 		up.getExecutorService().awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+	}
+
+	private void convertTexturesBack() throws IOException {
+		Files.walk(this.workingFolder).forEach(c -> {
+			if (!c.getFileName().toString().endsWith(".png")) {
+				return;
+			}
+
+			this.exec.submit(() -> {
+				try (OutputStream out = Files
+					.newOutputStream(c.resolveSibling(c.getFileName().toString().replace(".png", ".ntx")))) {
+
+					BufferedImage img = ImageIO.read(c.toFile());
+					final BlockFormat fmt = img.getAlphaRaster() == null ? BlockFormat.ARGB4 : BlockFormat.ARGB4;
+					byte[] data = NtxFileWriter.imageToRaw(img, img.getWidth(), img.getHeight(), fmt);
+					ByteArrayOutputStream mipmaps = new ByteArrayOutputStream(img.getHeight() * img.getWidth() * 2);
+					mipmaps.write(data);
+
+					int offset = 328; // 10 block headers of 8 ints
+
+					Block b = new Block();
+					b.setWidth(img.getWidth());
+					b.setHeight(img.getHeight());
+					b.setDataOffset(offset);
+					b.setDataLength(data.length);
+					b.setFormat(fmt);
+					b.setMipmapLevel(0);
+					b.setDepth(1);
+					b.setType(BlockType.TEXTURE_2D);
+
+					offset += data.length;
+
+					NtxFileWriter writer = new NtxFileWriter(out);
+					writer.writeHeader(10);
+					writer.writeBlock(b);
+
+					for (int i = 1; i < 10; i++) {
+						AffineTransform ts = AffineTransform.getScaleInstance(0.5, 0.5);
+						AffineTransformOp op = new AffineTransformOp(ts, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
+						img = op.filter(img, null);
+						data = NtxFileWriter.imageToRaw(img, img.getWidth(), img.getHeight(), fmt);
+						mipmaps.write(data);
+
+						b = new Block();
+						b.setWidth(img.getWidth());
+						b.setHeight(img.getHeight());
+						b.setDataOffset(offset);
+						b.setDataLength(data.length);
+						b.setFormat(fmt);
+						b.setMipmapLevel(i);
+						b.setDepth(1);
+						b.setType(BlockType.TEXTURE_2D);
+						writer.writeBlock(b);
+
+						offset += data.length;
+
+						if (b.getWidth() == 1 || b.getHeight() == 1) {
+							break;
+						}
+					}
+					mipmaps.write(new byte[4096]);
+					out.write(mipmaps.toByteArray());
+
+					Files.delete(c);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			});
+		});
 	}
 
 	private void upscaleUVs() throws IOException, InterruptedException {
@@ -126,7 +208,7 @@ public class EverythingUpscaler {
 			Path rel = this.workingFolder.relativize(upscaled);
 			Path to = this.extractionFolder.resolve(rel);
 			try {
-				Files.move(upscaled, to, StandardCopyOption.REPLACE_EXISTING);
+				Files.copy(upscaled, to, StandardCopyOption.REPLACE_EXISTING);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -137,13 +219,12 @@ public class EverythingUpscaler {
 		try (OutputStream out = Files.newOutputStream(this.upscaledOutput)) {
 			NnpkFileWriter writer = new NnpkFileWriter(out);
 			writer.writeArchive(this.extractionFolder.toFile());
-			NnpkFileReader.printToc(writer.getTableOfContents(), System.out);
 		}
 	}
 
 	private void waitForTasks() {
 		ThreadPoolExecutor e = (ThreadPoolExecutor) this.exec;
-		while (e.getTaskCount() < e.getCompletedTaskCount()) {
+		while (e.getActiveCount() > 0) {
 			Thread.yield();
 		}
 	}

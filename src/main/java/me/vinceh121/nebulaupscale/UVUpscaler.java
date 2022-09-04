@@ -10,7 +10,6 @@ import java.util.concurrent.Executors;
 
 import me.vinceh121.n2ae.model.NvxFileReader;
 import me.vinceh121.n2ae.model.NvxFileWriter;
-import me.vinceh121.n2ae.model.Vertex;
 import me.vinceh121.n2ae.model.VertexType;
 
 public class UVUpscaler {
@@ -32,6 +31,9 @@ public class UVUpscaler {
 				return;
 			}
 
+			if (!c.toString().contains("guntower"))
+				return;
+
 			this.exec.submit(() -> {
 				try {
 					final Path out = output.resolve(input.relativize(c));
@@ -45,10 +47,10 @@ public class UVUpscaler {
 					}
 					NvxFileWriter writer = new NvxFileWriter(new FileOutputStream(out.toFile()));
 					reader.moveToWriter(writer);
-					for (final Vertex v : writer.getVertices()) {
-						v.getUv().get(0)[0] *= this.scale;
-						v.getUv().get(0)[1] *= this.scale;
-					}
+//					for (final Vertex v : writer.getVertices()) {
+//						v.getUv().get(0)[0] *= this.scale;
+//						v.getUv().get(0)[1] *= this.scale;
+//					}
 					writer.writeHeaders();
 					writer.writeData();
 					writer.close();
@@ -82,7 +84,7 @@ public class UVUpscaler {
 	public void setScale(int scale) {
 		this.scale = scale;
 	}
-	
+
 	public ExecutorService getExecutorService() {
 		return exec;
 	}
