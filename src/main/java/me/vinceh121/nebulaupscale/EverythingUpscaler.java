@@ -63,9 +63,6 @@ public class EverythingUpscaler {
 		this.upscaleTextures();
 		this.convertTexturesBack();
 		this.waitForTasks();
-//		System.out.println("Upscaling UVs");
-//		this.upscaleUVs();
-//		this.waitForTasks();
 		System.out.println("Repacking");
 		this.moveWorking();
 		this.repack();
@@ -188,16 +185,6 @@ public class EverythingUpscaler {
 				}
 			});
 		});
-	}
-
-	private void upscaleUVs() throws IOException, InterruptedException {
-		UVUpscaler uv = new UVUpscaler();
-		uv.setInput(this.extractionFolder);
-		uv.setOutput(this.workingFolder);
-		uv.setScale(this.scale);
-		uv.run();
-		uv.getExecutorService().shutdown();
-		uv.getExecutorService().awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
 	}
 
 	private void moveWorking() throws IOException {
