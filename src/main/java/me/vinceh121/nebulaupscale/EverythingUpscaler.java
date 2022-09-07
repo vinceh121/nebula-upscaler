@@ -11,10 +11,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 
@@ -29,11 +33,18 @@ import me.vinceh121.n2ae.texture.NtxFileWriter;
 
 public class EverythingUpscaler {
 	private final ExecutorService exec;
+	private final List<String> blacklist = new ArrayList<>();
 	private Path dataArchive, extractionFolder, workingFolder, esrganPath, upscaledOutput;
 	private int scale = 4;
 
 	public static void main(String[] args) throws IOException, InterruptedException {
 		EverythingUpscaler e = new EverythingUpscaler();
+		e.setScale(4);
+		e.addBlacklist("/if_[a-z]+.n/");
+		e.addBlacklist("/lib/");
+		e.addBlacklist("weather");
+		e.addBlacklist("template");
+		e.addBlacklist("wolke");
 		e.setDataArchive(Paths.get("/home/vincent/Games/ProjectNomads/Project Nomads/Run/data-orig.npk"));
 		e.setExtractionFolder(Paths.get("/tmp/data.n/"));
 		e.setWorkingFolder(Paths.get("/tmp/data-upscaled.n/"));
@@ -86,6 +97,16 @@ public class EverythingUpscaler {
 		Files.walk(this.extractionFolder).forEach(c -> {
 			if (!c.getFileName().toString().endsWith(".ntx")) {
 				return;
+			}
+
+			for (final String test : this.blacklist) {
+				String relPath = "/" + this.extractionFolder.relativize(c).toString();
+				final Pattern pat = Pattern.compile(test, Pattern.CASE_INSENSITIVE);
+				final Matcher match = pat.matcher(relPath);
+				if (match.find()) {
+					System.out.println("Ignoring " + test + " in " + relPath);
+					return;
+				}
 			}
 
 			this.exec.submit(() -> {
@@ -176,7 +197,6 @@ public class EverythingUpscaler {
 							break;
 						}
 					}
-					mipmaps.write(new byte[4096]);
 					out.write(mipmaps.toByteArray());
 
 					Files.delete(c);
@@ -188,8 +208,19 @@ public class EverythingUpscaler {
 	}
 
 	private void moveWorking() throws IOException {
+		// delete the original textures that were converted to pngs
+		Files.walk(this.extractionFolder).forEach(ex -> {
+			if (ex.getFileName().toString().endsWith(".png")) {
+				try {
+					Files.delete(ex);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		});
+
 		Files.walk(this.workingFolder).forEach(upscaled -> {
-			if (!Files.isRegularFile(upscaled)) {
+			if (!Files.isRegularFile(upscaled) || upscaled.getFileName().toString().endsWith(".png")) {
 				return;
 			}
 			Path rel = this.workingFolder.relativize(upscaled);
@@ -262,5 +293,21 @@ public class EverythingUpscaler {
 
 	public void setScale(int scale) {
 		this.scale = scale;
+	}
+
+	public boolean containsBlacklist(Object o) {
+		return blacklist.contains(o);
+	}
+
+	public boolean addBlacklist(String e) {
+		return blacklist.add(e);
+	}
+
+	public boolean removeBlacklist(String o) {
+		return blacklist.remove(o);
+	}
+
+	public void clearBlacklist() {
+		blacklist.clear();
 	}
 }
