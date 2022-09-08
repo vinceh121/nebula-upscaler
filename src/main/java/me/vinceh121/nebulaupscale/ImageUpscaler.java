@@ -51,7 +51,7 @@ public class ImageUpscaler {
 					System.out.println("\t" + time + "ms\tavg: " + avg + "ms");
 					System.out.println(
 							"\t" + this.done + "/" + this.scheduled + "\t" + (this.done * 100f / this.scheduled) + "%");
-					System.out.println("\tETA: " + Duration.ofMillis(avg * (this.scheduled - this.done)));
+					System.out.println("\tETA:\t" + Duration.ofMillis(avg * (this.scheduled - this.done)));
 				} catch (IOException | InterruptedException e) {
 					e.printStackTrace();
 				}

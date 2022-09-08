@@ -32,13 +32,19 @@ import me.vinceh121.n2ae.texture.NtxFileReader;
 import me.vinceh121.n2ae.texture.NtxFileWriter;
 
 public class EverythingUpscaler {
+	/**
+	 * approx 2.14GB
+	 */
+	public static final long ARCHIVE_MAX_SIZE = 1000000000L;
 	private final ExecutorService exec;
 	private final List<String> blacklist = new ArrayList<>();
-	private Path dataArchive, extractionFolder, workingFolder, esrganPath, upscaledOutput;
-	private int scale = 4;
+	private final boolean splitArchive;
+	private Path dataArchive, extractionFolder, workingFolder, esrganPath, upscaledOutput, splitWorking, splitOutput;
+	private int scale = 4, splitCount;
+	private long currentSplitSize = 0;
 
 	public static void main(String[] args) throws IOException, InterruptedException {
-		EverythingUpscaler e = new EverythingUpscaler();
+		EverythingUpscaler e = new EverythingUpscaler(true);
 		e.setScale(4);
 		e.addBlacklist("/if_[a-z]+.n/");
 		e.addBlacklist("/lib/");
@@ -52,16 +58,21 @@ public class EverythingUpscaler {
 		e.setUpscaledOutput(Paths.get("/home/vincent/Games/ProjectNomads/Project Nomads/Run/data.npk"));
 		Files.createDirectories(e.getExtractionFolder());
 		Files.createDirectories(e.getWorkingFolder());
+
+		e.setSplitWorking(Paths.get("/tmp/"));
+		e.setSplitOutput(Paths.get("/home/vincent/Games/ProjectNomads/Project Nomads/Run/"));
+
 		e.run();
 		System.exit(0);
 	}
 
-	public EverythingUpscaler() {
-		this(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()));
+	public EverythingUpscaler(final boolean splitArchive) {
+		this(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()), splitArchive);
 	}
 
-	public EverythingUpscaler(ExecutorService exec) {
+	public EverythingUpscaler(ExecutorService exec, final boolean splitArchive) {
 		this.exec = exec;
+		this.splitArchive = splitArchive;
 	}
 
 	public void run() throws IOException, InterruptedException {
@@ -71,12 +82,18 @@ public class EverythingUpscaler {
 		this.convertAllTextures();
 		this.waitForTasks();
 		System.out.println("Upscaling Textures");
-		this.upscaleTextures();
+//		this.upscaleTextures();
 		this.convertTexturesBack();
 		this.waitForTasks();
 		System.out.println("Repacking");
-		this.moveWorking();
-		this.repack();
+		this.deleteOriginalConvertions();
+		if (this.splitArchive) {
+			this.moveWorkingSplit();
+			this.repackSplit();
+		} else {
+			this.moveWorking();
+			this.repack();
+		}
 		this.waitForTasks();
 
 		System.out.println("Done!");
@@ -207,7 +224,7 @@ public class EverythingUpscaler {
 		});
 	}
 
-	private void moveWorking() throws IOException {
+	private void deleteOriginalConvertions() throws IOException {
 		// delete the original textures that were converted to pngs
 		Files.walk(this.extractionFolder).forEach(ex -> {
 			if (ex.getFileName().toString().endsWith(".png")) {
@@ -218,7 +235,43 @@ public class EverythingUpscaler {
 				}
 			}
 		});
+	}
 
+	private void moveWorkingSplit() throws IOException {
+		Files.walk(this.workingFolder).forEach(upscaled -> {
+			if (!Files.isRegularFile(upscaled) || upscaled.getFileName().toString().endsWith(".png")) {
+				return;
+			}
+			try {
+				final long thisSize = Files.size(upscaled);
+				currentSplitSize += thisSize;
+				if (currentSplitSize > ARCHIVE_MAX_SIZE) {
+					this.splitCount++;
+					this.currentSplitSize = thisSize;
+				}
+
+				Path rel = this.workingFolder.relativize(upscaled);
+				Path to = this.splitWorking.resolve(this.getSplitWorkingName(this.splitCount))
+					.resolve("data.n")
+					.resolve(rel);
+				Files.createDirectories(to.getParent());
+				Files.copy(upscaled, to, StandardCopyOption.REPLACE_EXISTING);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		});
+	}
+
+	private void repackSplit() throws IOException {
+		for (int i = 0; i <= this.splitCount; i++) {
+			try (OutputStream out = Files.newOutputStream(this.splitOutput.resolve(this.getSplitWorkingName(i)))) {
+				NnpkFileWriter writer = new NnpkFileWriter(out);
+				writer.writeArchive(this.splitWorking.resolve(this.getSplitWorkingName(i)).resolve("data.n").toFile());
+			}
+		}
+	}
+
+	private void moveWorking() throws IOException {
 		Files.walk(this.workingFolder).forEach(upscaled -> {
 			if (!Files.isRegularFile(upscaled) || upscaled.getFileName().toString().endsWith(".png")) {
 				return;
@@ -238,6 +291,10 @@ public class EverythingUpscaler {
 			NnpkFileWriter writer = new NnpkFileWriter(out);
 			writer.writeArchive(this.extractionFolder.toFile());
 		}
+	}
+
+	private String getSplitWorkingName(int i) {
+		return "data-upscaled" + i + ".npk";
 	}
 
 	private void waitForTasks() {
@@ -285,6 +342,26 @@ public class EverythingUpscaler {
 
 	public void setUpscaledOutput(Path upscaledOutput) {
 		this.upscaledOutput = upscaledOutput;
+	}
+
+	public Path getSplitWorking() {
+		return splitWorking;
+	}
+
+	public void setSplitWorking(Path splitWorking) {
+		this.splitWorking = splitWorking;
+	}
+
+	public Path getSplitOutput() {
+		return splitOutput;
+	}
+
+	public void setSplitOutput(Path splitOutput) {
+		this.splitOutput = splitOutput;
+	}
+
+	public boolean isSplitArchive() {
+		return splitArchive;
 	}
 
 	public int getScale() {
