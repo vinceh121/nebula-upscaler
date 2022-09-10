@@ -1,0 +1,15 @@
+94a95,104
+>    
+>     ## Upscale mod
+>     for {set x 0} {$x < 5} {incr x} {
+>         if {[file exists "$nomads_home/data-upscaled$x.npk"]} {
+>             puts "Loading data-upscaled$x.npk"
+>             /sys/servers/file2.parsefile "home:data-upscaled$x.npk"
+>         } else {
+>             puts "Doesn't exist: data-upscaled$x.npk"
+>         }
+>     }
+101c111
+<     
+---
+>  
