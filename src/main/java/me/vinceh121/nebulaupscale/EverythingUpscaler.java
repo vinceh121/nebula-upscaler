@@ -33,7 +33,7 @@ import me.vinceh121.n2ae.texture.NtxFileWriter;
 
 public class EverythingUpscaler {
 	/**
-	 * approx 2.14GB
+	 * approx 1GB
 	 */
 	public static final long ARCHIVE_MAX_SIZE = 1000000000L;
 	private final ExecutorService exec;
@@ -47,10 +47,7 @@ public class EverythingUpscaler {
 		EverythingUpscaler e = new EverythingUpscaler(true);
 		e.setScale(4);
 		e.addBlacklist("/if_[a-z]+.n/");
-		e.addBlacklist("/lib/");
-		e.addBlacklist("weather");
-		e.addBlacklist("template");
-		e.addBlacklist("wolke");
+		e.addBlacklist("subtitle");
 		e.setDataArchive(Paths.get("/home/vincent/Games/ProjectNomads/Project Nomads/Run/data-orig.npk"));
 		e.setExtractionFolder(Paths.get("/tmp/data.n/"));
 		e.setWorkingFolder(Paths.get("/tmp/data-upscaled.n/"));
@@ -82,7 +79,7 @@ public class EverythingUpscaler {
 		this.convertAllTextures();
 		this.waitForTasks();
 		System.out.println("Upscaling Textures");
-//		this.upscaleTextures();
+		this.upscaleTextures();
 		this.convertTexturesBack();
 		this.waitForTasks();
 		System.out.println("Repacking");
@@ -116,14 +113,8 @@ public class EverythingUpscaler {
 				return;
 			}
 
-			for (final String test : this.blacklist) {
-				String relPath = "/" + this.extractionFolder.relativize(c).toString();
-				final Pattern pat = Pattern.compile(test, Pattern.CASE_INSENSITIVE);
-				final Matcher match = pat.matcher(relPath);
-				if (match.find()) {
-					System.out.println("Ignoring " + test + " in " + relPath);
-					return;
-				}
+			if (this.isBlacklisted(c)) {
+				return;
 			}
 
 			this.exec.submit(() -> {
@@ -191,9 +182,11 @@ public class EverythingUpscaler {
 					writer.writeBlock(b);
 
 					for (int i = 1; i < 10; i++) {
-						AffineTransform ts = AffineTransform.getScaleInstance(0.5, 0.5);
-						AffineTransformOp op = new AffineTransformOp(ts, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
-						img = op.filter(img, null);
+						if (img.getWidth() != 1 && img.getHeight() != 1) {
+							AffineTransform ts = AffineTransform.getScaleInstance(0.5, 0.5);
+							AffineTransformOp op = new AffineTransformOp(ts, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
+							img = op.filter(img, null);
+						}
 						data = NtxFileWriter.imageToRaw(img, img.getWidth(), img.getHeight(), fmt);
 						mipmaps.write(data);
 
@@ -209,14 +202,8 @@ public class EverythingUpscaler {
 						writer.writeBlock(b);
 
 						offset += data.length;
-
-						if (b.getWidth() == 1 || b.getHeight() == 1) {
-							break;
-						}
 					}
 					out.write(mipmaps.toByteArray());
-
-					Files.delete(c);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -239,7 +226,8 @@ public class EverythingUpscaler {
 
 	private void moveWorkingSplit() throws IOException {
 		Files.walk(this.workingFolder).forEach(upscaled -> {
-			if (!Files.isRegularFile(upscaled) || upscaled.getFileName().toString().endsWith(".png")) {
+			if (!Files.isRegularFile(upscaled) || upscaled.getFileName().toString().endsWith(".png")
+					|| this.isBlacklisted(upscaled)) {
 				return;
 			}
 			try {
@@ -302,6 +290,19 @@ public class EverythingUpscaler {
 		while (e.getActiveCount() > 0) {
 			Thread.yield();
 		}
+	}
+
+	private boolean isBlacklisted(Path p) {
+		for (final String test : this.blacklist) {
+			String relPath = "/" + this.extractionFolder.relativize(p).toString();
+			final Pattern pat = Pattern.compile(test, Pattern.CASE_INSENSITIVE);
+			final Matcher match = pat.matcher(relPath);
+			if (match.find()) {
+				System.out.println("Ignoring " + test + " in " + relPath);
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public Path getDataArchive() {
