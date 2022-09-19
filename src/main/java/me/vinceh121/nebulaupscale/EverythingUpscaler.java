@@ -40,11 +40,12 @@ public class EverythingUpscaler {
 	private final List<String> blacklist = new ArrayList<>();
 	private final boolean splitArchive;
 	private Path dataArchive, extractionFolder, workingFolder, esrganPath, upscaledOutput, splitWorking, splitOutput;
-	private int scale = 4, splitCount;
+	private int scale = 4, splitCount, iterations;
 	private long currentSplitSize = 0;
 
 	public static void main(String[] args) throws IOException, InterruptedException {
 		EverythingUpscaler e = new EverythingUpscaler(true);
+		e.setIterations(2);
 		e.setScale(4);
 		e.addBlacklist("/if_[a-z]+.n/");
 		e.addBlacklist("subtitle");
@@ -80,6 +81,7 @@ public class EverythingUpscaler {
 		this.waitForTasks();
 		System.out.println("Upscaling Textures");
 		this.upscaleTextures();
+		System.out.println("Converting back to NTX");
 		this.convertTexturesBack();
 		this.waitForTasks();
 		System.out.println("Repacking");
@@ -138,6 +140,7 @@ public class EverythingUpscaler {
 
 	private void upscaleTextures() throws IOException, InterruptedException {
 		ImageUpscaler up = new ImageUpscaler();
+		up.setIterations(this.iterations);
 		up.setScale(this.scale);
 		up.setInput(this.extractionFolder);
 		up.setOutput(this.workingFolder);
@@ -371,6 +374,14 @@ public class EverythingUpscaler {
 
 	public void setScale(int scale) {
 		this.scale = scale;
+	}
+
+	public int getIterations() {
+		return iterations;
+	}
+
+	public void setIterations(int iterations) {
+		this.iterations = iterations;
 	}
 
 	public boolean containsBlacklist(Object o) {
