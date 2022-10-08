@@ -40,13 +40,14 @@ public class EverythingUpscaler {
 	private final List<String> blacklist = new ArrayList<>();
 	private final boolean splitArchive;
 	private Path dataArchive, extractionFolder, workingFolder, esrganPath, upscaledOutput, splitWorking, splitOutput;
-	private int scale = 4, splitCount, iterations;
+	private int scale = 4, splitCount, iterations, iterationsScale = 4;
 	private long currentSplitSize = 0;
 
 	public static void main(String[] args) throws IOException, InterruptedException {
 		EverythingUpscaler e = new EverythingUpscaler(true);
 		e.setIterations(2);
-		e.setScale(4);
+		e.setIterationsScale(4);
+		e.setScale(2);
 		e.addBlacklist("/if_[a-z]+.n/");
 		e.addBlacklist("subtitle");
 		e.setDataArchive(Paths.get("/home/vincent/Games/ProjectNomads/Project Nomads/Run/data-orig.npk"));
@@ -142,6 +143,7 @@ public class EverythingUpscaler {
 		ImageUpscaler up = new ImageUpscaler();
 		up.setIterations(this.iterations);
 		up.setScale(this.scale);
+		up.setIterationsScale(this.iterationsScale);
 		up.setInput(this.extractionFolder);
 		up.setOutput(this.workingFolder);
 		up.setEsrganPath(this.esrganPath);
@@ -382,6 +384,14 @@ public class EverythingUpscaler {
 
 	public void setIterations(int iterations) {
 		this.iterations = iterations;
+	}
+
+	public int getIterationsScale() {
+		return iterationsScale;
+	}
+
+	public void setIterationsScale(int iterationsScale) {
+		this.iterationsScale = iterationsScale;
 	}
 
 	public boolean containsBlacklist(Object o) {

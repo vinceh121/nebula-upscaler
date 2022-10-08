@@ -11,7 +11,7 @@ public class ImageUpscaler {
 	public static final String ITERATION_PREFIX = "ITER_";
 	private final ExecutorService exec;
 	private Path input, output, esrganPath;
-	private int scale = 4, scheduled, done, timeTotal, iterations;
+	private int scale = 4, scheduled, done, timeTotal, iterations, iterationsScale;
 
 	public ImageUpscaler() {
 		this(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() / 5)); // a single realgan instance
@@ -43,7 +43,7 @@ public class ImageUpscaler {
 						Path iterOut = out.resolveSibling(ITERATION_PREFIX + i + "-" + out.getFileName().toString());
 						Process p = Runtime.getRuntime()
 							.exec(new String[] { this.esrganPath.toAbsolutePath().toString(), "-i", in.toString(), "-o",
-									iterOut.toAbsolutePath().toString(), "-s", String.valueOf(this.scale), "-f",
+									iterOut.toAbsolutePath().toString(), "-s", String.valueOf(this.iterationsScale), "-f",
 									"png" }, null, esrganPath.getParent().toAbsolutePath().toFile());
 						p.waitFor();
 						if (p.exitValue() != 0) {
@@ -52,8 +52,8 @@ public class ImageUpscaler {
 						in = iterOut;
 					}
 					Process p = Runtime.getRuntime()
-						.exec(new String[] { this.esrganPath.toAbsolutePath().toString(), "-i",
-								in.toString(), "-o", out.toString(), "-s", String.valueOf(this.scale) },
+						.exec(new String[] { this.esrganPath.toAbsolutePath().toString(), "-i", in.toString(), "-o",
+								out.toString(), "-s", String.valueOf(this.scale) },
 								null,
 								esrganPath.getParent().toAbsolutePath().toFile());
 					p.waitFor();
@@ -123,6 +123,14 @@ public class ImageUpscaler {
 
 	public void setIterations(int iterations) {
 		this.iterations = iterations;
+	}
+
+	public int getIterationsScale() {
+		return iterationsScale;
+	}
+
+	public void setIterationsScale(int iterationsScale) {
+		this.iterationsScale = iterationsScale;
 	}
 
 	public ExecutorService getExecutorService() {
