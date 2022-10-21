@@ -33,20 +33,20 @@ import me.vinceh121.n2ae.texture.NtxFileWriter;
 
 public class EverythingUpscaler {
 	/**
-	 * approx 500MB
+	 * approx 1GB
 	 */
-	public static final long ARCHIVE_MAX_SIZE = 500000000L;
+	public static final long ARCHIVE_MAX_SIZE = 1000000000L;
 	private final ExecutorService exec;
 	private final List<String> blacklist = new ArrayList<>();
 	private final boolean splitArchive;
 	private Path dataArchive, extractionFolder, workingFolder, esrganPath, upscaledOutput, splitWorking, splitOutput;
-	private int scale = 4, splitCount, iterations, iterationsScale = 4;
+	private int scale = 4, splitCount, splitFileCount, iterations, iterationsScale = 4;
 	private long currentSplitSize = 0;
 	private boolean dither;
 
 	public static void main(String[] args) throws IOException, InterruptedException {
 		EverythingUpscaler e = new EverythingUpscaler(true);
-		e.setDither(true);
+		e.setDither(false);
 		e.setIterationsScale(4);
 		e.setScale(4);
 		e.addBlacklist("/if_[a-z]+.n/");
@@ -242,8 +242,10 @@ public class EverythingUpscaler {
 			try {
 				final long thisSize = Files.size(upscaled);
 				currentSplitSize += thisSize;
-				if (currentSplitSize > ARCHIVE_MAX_SIZE) {
+				this.splitFileCount++;
+				if (currentSplitSize + this.npkTocSize(splitFileCount) > ARCHIVE_MAX_SIZE) {
 					this.splitCount++;
+					this.splitFileCount = 1;
 					this.currentSplitSize = thisSize;
 				}
 
@@ -257,6 +259,19 @@ public class EverythingUpscaler {
 				e.printStackTrace();
 			}
 		});
+	}
+
+	private int npkTocSize(int fileCount) {
+		return 4 + // header
+				4 + // blockLen
+				4 + // dataBlockStart
+				( // file
+				4 + // type
+						64 + // nameLength + approx name
+						4 + // offset
+						4 // length
+
+				) * fileCount;
 	}
 
 	private void repackSplit() throws IOException {
