@@ -33,21 +33,22 @@ import me.vinceh121.n2ae.texture.NtxFileWriter;
 
 public class EverythingUpscaler {
 	/**
-	 * approx 1GB
+	 * approx 500MB
 	 */
-	public static final long ARCHIVE_MAX_SIZE = 1000000000L;
+	public static final long ARCHIVE_MAX_SIZE = 500000000L;
 	private final ExecutorService exec;
 	private final List<String> blacklist = new ArrayList<>();
 	private final boolean splitArchive;
 	private Path dataArchive, extractionFolder, workingFolder, esrganPath, upscaledOutput, splitWorking, splitOutput;
 	private int scale = 4, splitCount, iterations, iterationsScale = 4;
 	private long currentSplitSize = 0;
+	private boolean dither;
 
 	public static void main(String[] args) throws IOException, InterruptedException {
 		EverythingUpscaler e = new EverythingUpscaler(true);
-		e.setIterations(2);
+		e.setDither(true);
 		e.setIterationsScale(4);
-		e.setScale(2);
+		e.setScale(4);
 		e.addBlacklist("/if_[a-z]+.n/");
 		e.addBlacklist("subtitle");
 		e.setDataArchive(Paths.get("/home/vincent/Games/ProjectNomads/Project Nomads/Run/data-orig.npk"));
@@ -163,6 +164,9 @@ public class EverythingUpscaler {
 					.newOutputStream(c.resolveSibling(c.getFileName().toString().replace(".png", ".ntx")))) {
 
 					BufferedImage img = ImageIO.read(c.toFile());
+					if (this.dither) {
+						Dithering.dither(img);
+					}
 					final BlockFormat fmt = img.getAlphaRaster() == null ? BlockFormat.ARGB4 : BlockFormat.ARGB4;
 					byte[] data = NtxFileWriter.imageToRaw(img, img.getWidth(), img.getHeight(), fmt);
 					ByteArrayOutputStream mipmaps = new ByteArrayOutputStream(img.getHeight() * img.getWidth() * 2);
@@ -392,6 +396,14 @@ public class EverythingUpscaler {
 
 	public void setIterationsScale(int iterationsScale) {
 		this.iterationsScale = iterationsScale;
+	}
+
+	public boolean isDither() {
+		return dither;
+	}
+
+	public void setDither(boolean dither) {
+		this.dither = dither;
 	}
 
 	public boolean containsBlacklist(Object o) {
